@@ -22,7 +22,7 @@ const pad = (n) => String(n).padStart(2, '0');
 export const BOOKING_INTENT_RE = /забронир|брониров|бронь|резерв|столик на|заказать стол/i;
 export const CANCEL_RE = /^(\/cancel|\/reset|\/start|отмена|отменить|отмени|стоп)$/i;
 
-function makeDate(ms) {
+export function makeDate(ms) {
   const d = new Date(ms);
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth() + 1;
@@ -98,7 +98,7 @@ export function normalizePhone(input) {
   return null;
 }
 
-function validateDate(date, now) {
+export function validateDate(date, now) {
   const today = Date.UTC(now.year, now.month - 1, now.day);
   if (date.ms < today) return 'Эта дата уже прошла. Укажите, пожалуйста, будущую дату.';
   if (date.ms > today + MAX_DAYS_AHEAD * DAY_MS) return 'Это слишком далёкая дата. Укажите дату поближе или позвоните нам: +7 705 168 79 69.';
@@ -108,7 +108,7 @@ function validateDate(date, now) {
   return null;
 }
 
-function validateTime(date, time, now) {
+export function validateTime(date, time, now) {
   const [open, close] = HOURS[date.weekday];
   const t = time.h * 60 + time.min;
   if (t < open * 60) {

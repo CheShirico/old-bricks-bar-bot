@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { almatyNow, workStatus } from './schedule.js';
 import { BOOKING_INTENT_RE, adminMessage } from './booking.js';
 import { CSV_HEADER, csvRow, intakeTurn, startIntake } from './bookingIntake.js';
-import { splitReasoning } from './reasoning.js';
+import { respondWithGuard } from './guard.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -311,16 +311,24 @@ async function handleMessage(msg) {
 
   try {
     const system = buildSystemPrompt();
-    const raw = await askWithFallback([{ role: 'system', content: system }, ...history]);
-    // Гостю уходит только <ответ>; <размышление> пишем в консоль и не кладём ни в историю, ни в сообщение
-    const { thinking, answer: parsed, tagged } = splitReasoning(raw);
+    // Страж (guard.js): ответ модели проверяется кодом по правилам промпта; при нарушении один повтор, потом безопасная заготовка.
+    // Гостю уходит только <ответ>; <размышление> пишем в консоль и не кладём ни в историю, ни в сообщение.
+    const { answer, thinking, tagged, attempts, violations, replaced } = await respondWithGuard({
+      ask: askWithFallback,
+      system,
+      history,
+      guestText: text,
+      knowledge: readFileSync(KNOWLEDGE_FILE, 'utf8'),
+      leaks: (a) => leaksInstructions(a, system),
+      phone: PHONE,
+    });
     if (thinking) console.log(`Размышление (чат ${chatId}): ${thinking.replace(/\s+/g, ' ')}`);
     if (!tagged) console.warn(`Модель не использовала теги <размышление>/<ответ> (чат ${chatId})`);
-    if (!parsed) throw new Error('модель вернула пустой <ответ> (возможно, размышление оборвалось по max_tokens)');
-    let answer = parsed.replace(/\*\*/g, ''); // страховка: модель иногда всё равно выделяет жирным
-    if (leaksInstructions(answer, system)) {
-      console.warn(`Ответ похож на утечку промпта, заменён (чат ${chatId})`);
-      answer = `Это внутренняя информация, её я не раскрываю. Могу рассказать про меню, цены, график работы или помочь с бронью стола. Чем помочь?`;
+    if (violations.length) {
+      const list = violations.map((x) => `${x.code}(${x.severity})`).join(', ');
+      console.warn(`Проверка ответа (чат ${chatId}): запросов ${attempts}, ${replaced ? 'ответ заменён заготовкой' : 'отправлен как есть'}, остались нарушения: ${list}`);
+    } else if (attempts > 1) {
+      console.log(`Проверка ответа (чат ${chatId}): модель исправила ответ с ${attempts}-й попытки`);
     }
     history.push({ role: 'assistant', content: answer });
     histories.set(chatId, history.slice(-MAX_HISTORY));

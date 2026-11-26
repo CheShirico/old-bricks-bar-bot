@@ -264,3 +264,26 @@ test('регрессия: в JS \w не совпадает с кириллице
   assert.ok(codes('Свободные места есть, приходи.').includes('BOOKING_PROMISE'), '«свободные места»');
   assert.ok(codes('Это описано в системном промпте.').includes('INTERNAL'), '«в системном промпте»');
 });
+
+// ---- Переключатель рассуждения ----
+
+test('рассуждение выключено (по умолчанию): ни напоминание, ни просьба переписать не требуют тегов', async () => {
+  assert.doesNotMatch(buildReminder('Что к пиву?', PHONE), /размышлени|<ответ>/);
+  const ask = fakeAsk('В 8 000 ₸ поместится: колбаски гриль + сет (7 300 ₸).', 'Возьми колбаски гриль за 3 800 ₸: с обслуживанием 10% выйдет 4 180 ₸.');
+  const r = await respondWithGuard({ ...base, ask });
+  assert.equal(r.attempts, 2);
+  assert.match(r.answer, /4 180/);
+  for (const m of ask.calls[1]) assert.doesNotMatch(m.content, /<размышление>|<ответ>/);
+});
+
+test('рассуждение включено: формат с тегами есть в напоминании и в просьбе переписать', async () => {
+  assert.match(buildReminder('Что к пиву?', PHONE, true), /<размышление>…<\/размышление><ответ>/);
+  const ask = fakeAsk(BAD, GOOD);
+  await respondWithGuard({ ...base, ask, reasoning: true });
+  assert.match(ask.calls[1].at(-1).content, /сохрани формат <размышление>/);
+});
+
+test('рассуждение выключено, но модель всё равно прислала теги: гостю уходит только ответ', async () => {
+  const r = await respondWithGuard({ ...base, ask: fakeAsk(GOOD) });
+  assert.doesNotMatch(r.answer, /думаю|размышление|<ответ>/);
+});

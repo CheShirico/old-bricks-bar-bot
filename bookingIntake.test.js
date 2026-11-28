@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { almatyNow } from './schedule.js';
-import { CONFIRM_FALLBACK_MESSAGE, MANUAL_NOTICE, buildExtractionPrompt, csvRow, intakeTurn, parseModelJson, startIntake } from './bookingIntake.js';
+import { CONFIRM_FALLBACK_MESSAGE, MANUAL_NOTICE, MIXED_SEATING_NOTICE,buildExtractionPrompt, csvRow, intakeTurn, parseModelJson, startIntake } from './bookingIntake.js';
 
 const NOW = almatyNow(new Date('2026-11-21T07:00:00Z')); // суббота, 12:00 в Алматы
 const EVENING = almatyNow(new Date('2026-11-21T13:00:00Z')); // суббота, 18:00 в Алматы
@@ -55,6 +55,16 @@ test('все поля в одном сообщении: показывает и�
   assert.match(r.reply, /27\.11\.2026 \(пятница\)/);
   assert.match(r.reply, /Телефон: \+77051234567/);
   assert.deepEqual(r.keyboard, [['Да', 'Нет']]);
+});
+
+test('смешанная рассадка: предупреждение только если гостей больше 30', async () => {
+  const replyFor = async (guests) => (await intakeTurn(null, FULL_TEXT, NOW, fakeAsk({ ...FULL, guests }))).reply;
+  assert.doesNotMatch(await replyFor(30), /смешанная рассадка/);
+  for (const guests of [31, 50]) {
+    const reply = await replyFor(guests);
+    assert.ok(reply.includes(MIXED_SEATING_NOTICE), `${guests} гостей`);
+    assert.match(reply, /Подтверждаете\?/);
+  }
 });
 
 test('«Да» после итога отдаёт заявку на сохранение, «Нет» отменяет', async () => {

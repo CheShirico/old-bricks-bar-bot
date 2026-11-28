@@ -6,6 +6,9 @@ import { CANCEL_RE, makeDate, parseDate, parseTime, validateDate, validateTime }
 export const FIELDS = ['date', 'time', 'guests', 'name', 'phone'];
 export const CONFIRM_KEYBOARD = [['Да', 'Нет']];
 const MAX_GUESTS = 50;
+const SEATS = 30; // посадочных мест не больше 30 (см. knowledge.md)
+export const MIXED_SEATING_NOTICE =
+  'При брони больше чем на 30 человек подразумевается смешанная рассадка: часть гостей сидит, часть стоит.';
 const PHONE = '+7 705 168 79 69';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -299,9 +302,12 @@ export async function intakeTurn(state, rawText, now, ask) {
     return { state: { stage: 'collect', draft: merged, asked: first, manual }, reply };
   }
 
+  // Большую компанию предупреждаем о стоячих местах до подтверждения
+  const seating = merged.guests > SEATS ? `\n\n${MIXED_SEATING_NOTICE}` : '';
+
   return {
     state: { stage: 'confirm', draft: merged, asked: null, manual },
-    reply: `${notice}Проверьте заявку:\n\n${summaryText(merged)}\n\nПодтверждаете?${manual ? '' : ' Если что-то не так, напишите, что исправить.'}`,
+    reply: `${notice}Проверьте заявку:\n\n${summaryText(merged)}${seating}\n\nПодтверждаете?${manual ? '' : ' Если что-то не так, напишите, что исправить.'}`,
     keyboard: CONFIRM_KEYBOARD,
   };
 }
